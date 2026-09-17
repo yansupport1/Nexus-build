@@ -5,7 +5,7 @@ on:
     branches: [ "main", "master" ]
   pull_request:
     branches: [ "main", "master" ]
-  workflow_dispatch: # Memungkinkan build manual dari tab Actions
+  workflow_dispatch:
 
 jobs:
   build:
@@ -16,33 +16,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract and Find Project Root
+      - name: Extract ZIP File
         run: |
-          # 1. Jika file zip di-upload langsung, ekstrak dulu
           if ls *.zip 1> /dev/null 2>&1; then
-            echo "File .zip ditemukan. Mengekstrak..."
             unzip -q *.zip -d temp_extract
             rm *.zip
           fi
-          
-          # 2. Cari di folder mana file pubspec.yaml berada
           PUBSPEC_PATH=$(find . -name pubspec.yaml | head -n 1)
-          
           if [ -n "$PUBSPEC_PATH" ]; then
             PROJECT_DIR=$(dirname "$PUBSPEC_PATH")
-            echo "Proyek Flutter ditemukan di: $PROJECT_DIR"
-            
-            # 3. Jika lokasinya bukan di root, pindahkan semua isinya ke root
             if [ "$PROJECT_DIR" != "." ] && [ "$PROJECT_DIR" != "./" ]; then
-              echo "Memindahkan file ke luar (ke root repository)..."
               cp -a "$PROJECT_DIR"/. .
               rm -rf "$PROJECT_DIR"
             fi
-            
-            echo "Struktur file siap di-build:"
-            ls -la
           else
-            echo "ERROR: pubspec.yaml tidak ditemukan! Pastikan file proyek ter-upload."
+            echo "ERROR: pubspec.yaml tidak ditemukan!"
             exit 1
           fi
 
@@ -58,18 +46,22 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Regenerate Fresh Android Folder (The Ultimate Fix)
+        run: |
+          # 1. Hapus folder android lama yang cacat
+          rm -rf android
+          
+          # 2. Suruh Flutter bikin folder android baru yang 100% sempurna
+          flutter create --platforms android .
+
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Generate App Icon
+        run: dart run flutter_launcher_icons
+
       - name: Build APK release
-        run: |
-          # Perbaikan untuk masalah folder Android lama (v1 embedding)
-          rm -rf android/build android/app/build || true
-          
-          # Generate icon dilakukan di background untuk menghindari error iOS
-          dart run flutter_launcher_icons || true
-          
-          flutter build apk --release
+        run: flutter build apk --release
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4

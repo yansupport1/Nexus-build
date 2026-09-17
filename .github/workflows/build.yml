@@ -1,99 +1,46 @@
-name: Build APK
+name: Build Flutter APK
 
 on:
   push:
-    branches: [main, master]
-  workflow_dispatch:
-    inputs:
-      zip_name:
-        description: "Nama file .zip (kosongkan = auto-deteksi zip pertama yang ketemu)"
-        required: false
-        default: ""
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch: # Memungkinkan build manual dari tab Actions
 
 jobs:
   build:
+    name: Build APK
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Cari & extract project zip
-        run: |
-          set -e
-          ZIP_INPUT="${{ github.event.inputs.zip_name }}"
-          if [ -n "$ZIP_INPUT" ]; then
-            ZIP_FILE=$(find . -name "$ZIP_INPUT" -not -path "./project/*" | head -n 1)
-          else
-            ZIP_FILE=$(find . -iname "*.zip" -not -path "./project/*" | head -n 1)
-          fi
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
 
-          if [ -z "$ZIP_FILE" ]; then
-            echo "::error::Tidak ada file .zip yang ditemukan di repo ini."
-            exit 1
-          fi
-
-          echo "Menggunakan zip: $ZIP_FILE"
-          mkdir -p project
-          unzip -o "$ZIP_FILE" -d project
-
-      - name: Debug - lihat isi hasil extract
-        run: find project -maxdepth 6
-
-      - name: Deteksi lokasi pubspec.yaml (kalau ke-nest di subfolder)
-        id: locate
-        run: |
-          set -e
-          PUBSPEC=$(find project -maxdepth 4 -name "pubspec.yaml" | head -n 1)
-          if [ -z "$PUBSPEC" ]; then
-            echo "::error::pubspec.yaml tidak ditemukan di dalam zip. Ini bukan project Flutter yang valid."
-            exit 1
-          fi
-          PROJECT_DIR=$(dirname "$PUBSPEC")
-          echo "Project ditemukan di: $PROJECT_DIR"
-          echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
-
-      - name: Auto-fix nama package di pubspec.yaml jika tidak valid
-        working-directory: ${{ steps.locate.outputs.dir }}
-        run: |
-          set -e
-          OLD_NAME=$(grep -m1 '^name:' pubspec.yaml | sed 's/^name:[[:space:]]*//' | tr -d '"' | tr -d "'")
-          NEW_NAME=$(echo "$OLD_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9_]+/_/g' | sed -E 's/^[0-9_]+//' | sed -E 's/_+/_/g' | sed -E 's/_$//')
-          if [ -z "$NEW_NAME" ]; then
-            NEW_NAME="app_project"
-          fi
-          if [ "$OLD_NAME" != "$NEW_NAME" ]; then
-            echo "Nama package '$OLD_NAME' tidak valid untuk Dart, diganti jadi '$NEW_NAME'"
-            sed -i "0,/^name:.*/s//name: $NEW_NAME/" pubspec.yaml
-            if [ -d lib ] && [ -n "$OLD_NAME" ]; then
-              grep -rl "package:$OLD_NAME/" lib/ 2>/dev/null | xargs -r sed -i "s#package:$OLD_NAME/#package:$NEW_NAME/#g" || true
-            fi
-          else
-            echo "Nama package sudah valid: $NEW_NAME"
-          fi
-
-      - uses: subosito/flutter-action@v2
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           cache: true
 
-      - run: flutter doctor -v
+      - name: Get dependencies
+        run: flutter pub get
 
-      - name: Lengkapi folder android/ jika belum ada
-        working-directory: ${{ steps.locate.outputs.dir }}
-        run: |
-          if [ ! -d "android/app" ]; then
-            PROJ_NAME=$(grep -m1 '^name:' pubspec.yaml | sed 's/^name:[[:space:]]*//' | tr -d '\r' | tr -d '"' | tr -d "'")
-            echo "Folder android/app tidak lengkap, menjalankan 'flutter create' (nama: $PROJ_NAME) untuk melengkapi platform files..."
-            flutter create --platforms=android --project-name "$PROJ_NAME" .
-          fi
+      # Langkah ini akan merubah icon.png kamu menjadi Icon Aplikasi Android
+      - name: Generate App Icon
+        run: dart run flutter_launcher_icons || true
 
-      - run: flutter pub get
-        working-directory: ${{ steps.locate.outputs.dir }}
+      - name: Build APK release
+        run: flutter build apk --release
 
-      - run: flutter build apk --release --enable-experiment=dot-shorthands
-        working-directory: ${{ steps.locate.outputs.dir }}
-
-      - uses: actions/upload-artifact@v4
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: app-release-apk
-          path: ${{ steps.locate.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: error
+          name: app-release.apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 7

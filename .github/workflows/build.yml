@@ -46,13 +46,18 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Regenerate Fresh Android Folder (The Ultimate Fix)
+      - name: Regenerate Android Folder & Inject Overlay Permissions
         run: |
-          # 1. Hapus folder android lama yang cacat
+          # 1. Bikin ulang sistem Android
           rm -rf android
-          
-          # 2. Suruh Flutter bikin folder android baru yang 100% sempurna
           flutter create --platforms android .
+          
+          # 2. Suntik Perizinan Overlay & Notifikasi ke AndroidManifest.xml
+          MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
+          
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n' $MANIFEST_PATH
+          
+          sed -i '/<\/application>/i \        <service android:name="flutter.overlay.window.flutter_overlay_window.OverlayService" android:exported="false" android:foregroundServiceType="specialUse" />\n' $MANIFEST_PATH
 
       - name: Get dependencies
         run: flutter pub get

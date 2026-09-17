@@ -1,20 +1,77 @@
 name: Build APK
-on: { push: { branches: [main, master] }, workflow_dispatch: {} }
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      zip_name:
+        description: "Nama file .zip (kosongkan = auto-deteksi zip pertama yang ketemu)"
+        required: false
+        default: ""
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Extract project zip
+
+      - name: Cari & extract project zip
         run: |
-          find . -name "*.zip" -not -path "./project/*" -exec unzip -o {} -d project \;
+          set -e
+          ZIP_INPUT="${{ github.event.inputs.zip_name }}"
+          if [ -n "$ZIP_INPUT" ]; then
+            ZIP_FILE=$(find . -name "$ZIP_INPUT" -not -path "./project/*" | head -n 1)
+          else
+            ZIP_FILE=$(find . -iname "*.zip" -not -path "./project/*" | head -n 1)
+          fi
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "::error::Tidak ada file .zip yang ditemukan di repo ini."
+            exit 1
+          fi
+
+          echo "Menggunakan zip: $ZIP_FILE"
+          mkdir -p project
+          unzip -o "$ZIP_FILE" -d project
+
+      - name: Deteksi lokasi pubspec.yaml (kalau ke-nest di subfolder)
+        id: locate
+        run: |
+          set -e
+          PUBSPEC=$(find project -maxdepth 4 -name "pubspec.yaml" | head -n 1)
+          if [ -z "$PUBSPEC" ]; then
+            echo "::error::pubspec.yaml tidak ditemukan di dalam zip. Ini bukan project Flutter yang valid."
+            exit 1
+          fi
+          PROJECT_DIR=$(dirname "$PUBSPEC")
+          echo "Project ditemukan di: $PROJECT_DIR"
+          echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+
       - uses: subosito/flutter-action@v2
-        with: { flutter-version: '3.24.0', channel: 'stable' }
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+          cache: true
+
+      - run: flutter doctor -v
+
+      - name: Lengkapi folder android/ jika belum ada
+        working-directory: ${{ steps.locate.outputs.dir }}
+        run: |
+          if [ ! -d "android/app" ]; then
+            echo "Folder android/app tidak lengkap, menjalankan 'flutter create .' untuk melengkapi platform files..."
+            flutter create --platforms=android .
+          fi
+
       - run: flutter pub get
-        working-directory: project
+        working-directory: ${{ steps.locate.outputs.dir }}
+
       - run: flutter build apk --release
-        working-directory: project
+        working-directory: ${{ steps.locate.outputs.dir }}
+
       - uses: actions/upload-artifact@v4
         with:
-          name: nexus-tools-apk
-          path: project/build/app/outputs/flutter-apk/app-release.apk
+          name: app-release-apk
+          path: ${{ steps.locate.outputs.dir }}/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error

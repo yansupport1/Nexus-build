@@ -51,6 +51,25 @@ jobs:
           echo "Project ditemukan di: $PROJECT_DIR"
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
+      - name: Auto-fix nama package di pubspec.yaml jika tidak valid
+        working-directory: ${{ steps.locate.outputs.dir }}
+        run: |
+          set -e
+          OLD_NAME=$(grep -m1 '^name:' pubspec.yaml | sed 's/^name:[[:space:]]*//' | tr -d '"' | tr -d "'")
+          NEW_NAME=$(echo "$OLD_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9_]+/_/g' | sed -E 's/^[0-9_]+//' | sed -E 's/_+/_/g' | sed -E 's/_$//')
+          if [ -z "$NEW_NAME" ]; then
+            NEW_NAME="app_project"
+          fi
+          if [ "$OLD_NAME" != "$NEW_NAME" ]; then
+            echo "Nama package '$OLD_NAME' tidak valid untuk Dart, diganti jadi '$NEW_NAME'"
+            sed -i "0,/^name:.*/s//name: $NEW_NAME/" pubspec.yaml
+            if [ -d lib ] && [ -n "$OLD_NAME" ]; then
+              grep -rl "package:$OLD_NAME/" lib/ 2>/dev/null | xargs -r sed -i "s#package:$OLD_NAME/#package:$NEW_NAME/#g" || true
+            fi
+          else
+            echo "Nama package sudah valid: $NEW_NAME"
+          fi
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.24.0'

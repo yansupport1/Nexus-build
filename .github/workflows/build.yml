@@ -1,0 +1,20 @@
+name: Build APK
+on: { push: { branches: [main, master] }, workflow_dispatch: {} }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract project zip
+        run: |
+          unzip -o nexus-tools-flutter-project-siap-build.zip -d project
+      - uses: subosito/flutter-action@v2
+        with: { flutter-version: '3.24.0', channel: 'stable' }
+      - run: flutter pub get
+        working-directory: project
+      - run: flutter build apk --release
+        working-directory: project
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexus-tools-apk
+          path: project/build/app/outputs/flutter-apk/app-release.apk

@@ -3,8 +3,6 @@ name: Build Flutter APK
 on:
   push:
     branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
@@ -16,21 +14,34 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract ZIP File
+      - name: Bersihkan Kode Lama & Ekstrak ZIP Terbaru
         run: |
-          if ls *.zip 1> /dev/null 2>&1; then
-            unzip -q *.zip -d temp_extract
-            rm *.zip
-          fi
-          PUBSPEC_PATH=$(find . -name pubspec.yaml | head -n 1)
-          if [ -n "$PUBSPEC_PATH" ]; then
-            PROJECT_DIR=$(dirname "$PUBSPEC_PATH")
-            if [ "$PROJECT_DIR" != "." ] && [ "$PROJECT_DIR" != "./" ]; then
+          # 1. Hapus sisa-sisa source code lama agar tidak bentrok
+          echo "Membersihkan workspace dari kode lama..."
+          rm -rf lib android ios web pubspec.yaml pubspec.lock extracted_project temp_extract
+          
+          # 2. Cari file ZIP yang Paling Baru di-upload
+          ZIP_FILE=$(ls -t *.zip | head -n 1)
+          
+          if [ -n "$ZIP_FILE" ]; then
+            echo "Ditemukan ZIP terbaru: $ZIP_FILE"
+            echo "Mengekstrak..."
+            unzip -q -o "$ZIP_FILE" -d extracted_project
+            
+            # 3. Cari dimana letak pubspec.yaml
+            PUBSPEC_PATH=$(find extracted_project -name pubspec.yaml | head -n 1)
+            
+            if [ -n "$PUBSPEC_PATH" ]; then
+              PROJECT_DIR=$(dirname "$PUBSPEC_PATH")
+              echo "Memindahkan kode dari dalam folder ke depan..."
               cp -a "$PROJECT_DIR"/. .
-              rm -rf "$PROJECT_DIR"
+              rm -rf extracted_project
+            else
+              echo "ERROR: pubspec.yaml tidak ada di dalam ZIP!"
+              exit 1
             fi
           else
-            echo "ERROR: pubspec.yaml tidak ditemukan!"
+            echo "ERROR: Tidak ada file .zip yang di-upload di repository!"
             exit 1
           fi
 
@@ -46,13 +57,13 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Regenerate Android Folder & Inject Overlay Permissions
+      - name: Bikin Folder Android Fresh & Inject Izin Overlay
         run: |
-          # 1. Bikin ulang sistem Android
+          # Bikin ulang sistem Android
           rm -rf android
           flutter create --platforms android .
           
-          # 2. Suntik Perizinan Overlay & Notifikasi ke AndroidManifest.xml
+          # Suntik Perizinan Overlay & Notifikasi ke AndroidManifest.xml
           MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
           
           sed -i '/<application/i \    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n' $MANIFEST_PATH

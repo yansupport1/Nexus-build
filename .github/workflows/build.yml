@@ -85,10 +85,8 @@ jobs:
             echo "Folder android/app tidak lengkap, menjalankan 'flutter create' (nama: $PROJ_NAME) untuk melengkapi platform files..."
             flutter create --platforms=android --project-name "$PROJ_NAME" .
           fi
-
-      - run: flutter pub get
+   - run: flutter build apk --release --enable-experiment=dot-shorthands
         working-directory: ${{ steps.locate.outputs.dir }}
-
       - run: flutter build apk --release
         working-directory: ${{ steps.locate.outputs.dir }}
 

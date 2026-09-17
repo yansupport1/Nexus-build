@@ -35,6 +35,9 @@ jobs:
           mkdir -p project
           unzip -o "$ZIP_FILE" -d project
 
+      - name: Debug - lihat isi hasil extract
+        run: find project -maxdepth 6
+
       - name: Deteksi lokasi pubspec.yaml (kalau ke-nest di subfolder)
         id: locate
         run: |

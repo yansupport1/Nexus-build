@@ -61,11 +61,15 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Generate App Icon
-        run: dart run flutter_launcher_icons || true
-
       - name: Build APK release
-        run: flutter build apk --release
+        run: |
+          # Perbaikan untuk masalah folder Android lama (v1 embedding)
+          rm -rf android/build android/app/build || true
+          
+          # Generate icon dilakukan di background untuk menghindari error iOS
+          dart run flutter_launcher_icons || true
+          
+          flutter build apk --release
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4

@@ -82,8 +82,9 @@ jobs:
         working-directory: ${{ steps.locate.outputs.dir }}
         run: |
           if [ ! -d "android/app" ]; then
-            echo "Folder android/app tidak lengkap, menjalankan 'flutter create .' untuk melengkapi platform files..."
-            flutter create --platforms=android .
+            PROJ_NAME=$(grep -m1 '^name:' pubspec.yaml | sed 's/^name:[[:space:]]*//' | tr -d '\r' | tr -d '"' | tr -d "'")
+            echo "Folder android/app tidak lengkap, menjalankan 'flutter create' (nama: $PROJ_NAME) untuk melengkapi platform files..."
+            flutter create --platforms=android --project-name "$PROJ_NAME" .
           fi
 
       - run: flutter pub get

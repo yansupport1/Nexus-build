@@ -21,10 +21,15 @@ jobs:
           if ls *.zip 1> /dev/null 2>&1; then
             echo "Menemukan file .zip, mengekstrak..."
             unzip -q *.zip -d extracted_project
-            # Pindahkan semua isi dari folder ekstrak ke root directory
-            mv extracted_project/* . || true
-            mv extracted_project/.* . 2>/dev/null || true
-            rm -rf extracted_project
+            # Pindahkan semua isi dari dalam folder (jika zip terbungkus 1 folder utama)
+            if [ -d "extracted_project/nexus-tools-flutter-apk-project" ]; then
+                mv extracted_project/nexus-tools-flutter-apk-project/* . || true
+                mv extracted_project/nexus-tools-flutter-apk-project/.* . 2>/dev/null || true
+            else
+                mv extracted_project/* . || true
+                mv extracted_project/.* . 2>/dev/null || true
+            fi
+            rm -rf extracted_project *.zip
             echo "Ekstraksi selesai. Isi root sekarang:"
             ls -la
           else

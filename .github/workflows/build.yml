@@ -16,24 +16,34 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract ZIP File (If Uploaded as ZIP)
+      - name: Extract and Find Project Root
         run: |
+          # 1. Jika file zip di-upload langsung, ekstrak dulu
           if ls *.zip 1> /dev/null 2>&1; then
-            echo "Menemukan file .zip, mengekstrak..."
-            unzip -q *.zip -d extracted_project
-            # Pindahkan semua isi dari dalam folder (jika zip terbungkus 1 folder utama)
-            if [ -d "extracted_project/nexus-tools-flutter-apk-project" ]; then
-                mv extracted_project/nexus-tools-flutter-apk-project/* . || true
-                mv extracted_project/nexus-tools-flutter-apk-project/.* . 2>/dev/null || true
-            else
-                mv extracted_project/* . || true
-                mv extracted_project/.* . 2>/dev/null || true
+            echo "File .zip ditemukan. Mengekstrak..."
+            unzip -q *.zip -d temp_extract
+            rm *.zip
+          fi
+          
+          # 2. Cari di folder mana file pubspec.yaml berada
+          PUBSPEC_PATH=$(find . -name pubspec.yaml | head -n 1)
+          
+          if [ -n "$PUBSPEC_PATH" ]; then
+            PROJECT_DIR=$(dirname "$PUBSPEC_PATH")
+            echo "Proyek Flutter ditemukan di: $PROJECT_DIR"
+            
+            # 3. Jika lokasinya bukan di root, pindahkan semua isinya ke root
+            if [ "$PROJECT_DIR" != "." ] && [ "$PROJECT_DIR" != "./" ]; then
+              echo "Memindahkan file ke luar (ke root repository)..."
+              cp -a "$PROJECT_DIR"/. .
+              rm -rf "$PROJECT_DIR"
             fi
-            rm -rf extracted_project *.zip
-            echo "Ekstraksi selesai. Isi root sekarang:"
+            
+            echo "Struktur file siap di-build:"
             ls -la
           else
-            echo "Tidak ada file ZIP yang ditemukan. Melanjutkan dengan struktur repository saat ini."
+            echo "ERROR: pubspec.yaml tidak ditemukan! Pastikan file proyek ter-upload."
+            exit 1
           fi
 
       - name: Set up Java

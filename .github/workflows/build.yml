@@ -7,7 +7,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Extract project zip
         run: |
-          unzip -o *.zip -d project
+          find . -name "*.zip" -not -path "./project/*" -exec unzip -o {} -d project \;
       - uses: subosito/flutter-action@v2
         with: { flutter-version: '3.24.0', channel: 'stable' }
       - run: flutter pub get
